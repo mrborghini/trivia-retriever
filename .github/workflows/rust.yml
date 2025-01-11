@@ -1,0 +1,142 @@
+name: Rust Build and Release
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+  workflow_dispatch: # Allows manual triggering of the workflow
+
+env:
+  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+jobs:
+  extract-version:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.extract_version.outputs.version }}
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Extract version from Cargo.toml
+      id: extract_version
+      run: |
+        version=$(grep '^version =' Cargo.toml | sed 's/version = \"//;s/\"//')
+        echo "version=$version" >> $GITHUB_OUTPUT
+
+  build:
+    needs: extract-version
+    runs-on: ubuntu-latest
+    env:
+      CARGO_VERSION: ${{ needs.extract-version.outputs.version }}
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install Rust
+      run: rustup update stable
+
+    - name: Print environment
+      run: env # Debug: Print environment variables
+
+    - name: Build
+      run: cargo build --release --verbose
+
+    - name: List build directory
+      run: ls -la target/release # Debug: List the contents of the release directory to verify the build
+
+    - name: Run tests
+      run: cargo test --verbose
+
+    - name: Create release artifact
+      run: |
+        mkdir -p artifacts
+        cp target/release/trivia-retriever artifacts/trivia-retriever-x86_64-Linux
+
+    - name: Verify artifact creation
+      run: ls -la artifacts # Debug: Verify that the artifact was copied correctly
+
+    - name: Upload artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: release-binary
+        path: artifacts/
+
+  windows-build:
+    needs: extract-version
+    runs-on: windows-latest
+    env:
+      CARGO_VERSION: ${{ needs.extract-version.outputs.version }}
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install Rust
+      run: rustup update stable
+
+    - name: Print environment
+      run: env # Debug: Print environment variables
+
+    - name: Build
+      run: cargo build --release --verbose
+
+    - name: List build directory
+      run: dir target\release # Debug: List the contents of the release directory to verify the build (Windows)
+
+    - name: Run tests
+      run: cargo test --verbose
+
+    - name: Create release artifact
+      run: |
+        mkdir artifacts
+        copy target\release\trivia-retriever.exe artifacts\trivia-retriever-x86_64-Windows.exe
+
+    - name: Verify artifact creation
+      run: dir artifacts # Debug: Verify that the artifact was copied correctly (Windows)
+
+    - name: Upload artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: release-binary-windows
+        path: artifacts/
+
+  release:
+    needs: [build, windows-build, extract-version]
+    runs-on: ubuntu-latest
+    env:
+      CARGO_VERSION: ${{ needs.extract-version.outputs.version }}
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Download Linux artifact
+      uses: actions/download-artifact@v4
+      with:
+        name: release-binary
+        path: ./release-binary-linux
+
+    - name: Download Windows artifact
+      uses: actions/download-artifact@v4
+      with:
+        name: release-binary-windows
+        path: ./release-binary-windows
+
+    - name: List downloaded artifacts
+      run: |
+        ls -la ./release-binary-linux
+        ls -la ./release-binary-windows
+
+    - name: Install GitHub CLI
+      run: sudo apt-get install -y gh
+
+    - name: Delete existing release assets (if any)
+      run: |
+        gh release delete-asset v${{ env.CARGO_VERSION }} trivia-retriever-x86_64-Linux || true
+        gh release delete-asset v${{ env.CARGO_VERSION }} trivia-retriever-x86_64-Windows.exe || true
+
+    - name: Create GitHub Release
+      run: |
+        gh release create v${{ env.CARGO_VERSION }} ./release-binary-linux/trivia-retriever-x86_64-Linux ./release-binary-windows/trivia-retriever-x86_64-Windows.exe \
+          --title "Release ${{ env.CARGO_VERSION }}" \
+          --notes "Automated release"
