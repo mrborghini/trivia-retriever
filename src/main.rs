@@ -56,13 +56,41 @@ fn format_question(mut trivia: OpentDBTrivia) -> String {
     return trivia.question;
 }
 
+fn clean_string(input_string: String) -> String {
+    input_string
+        .replace("&quot;", "\"")
+        .replace("&amp;", "&")
+        .replace("&#039;", "'")
+        .replace("&lt;", "<")
+        .replace("&gt;", ">")
+        .replace("&nbsp;", " ")
+        .replace("&cent;", "¢")
+        .replace("&pound;", "£")
+        .replace("&yen;", "¥")
+        .replace("&euro;", "€")
+        .replace("&copy;", "©")
+        .replace("&reg;", "®")
+}
+
+fn remove_html(mut trivia: OpentDBTrivia) -> OpentDBTrivia {
+    trivia.question = clean_string(trivia.question);
+    trivia.correct_answer = clean_string(trivia.correct_answer);
+
+    for i in 0..trivia.incorrect_answers.len() {
+        trivia.incorrect_answers[i] = clean_string(trivia.incorrect_answers[i].clone())
+    }
+
+    trivia
+}
+
 fn add_data(response: OpentDBResponse) {
     let current_data = fs::read_to_string(OUTPUT_FILE).unwrap_or_else(|_| "[]".to_string());
     let mut current_trivia: Vec<Trivia> =
         serde_json::from_str(&current_data).unwrap_or_else(|_| Vec::new());
 
     let mut added = 0;
-    for trivia in response.results {
+    for mut trivia in response.results {
+        trivia = remove_html(trivia);
         let difficulty = trivia.difficulty.clone();
         let answer = trivia.correct_answer.clone();
         let original_question = trivia.question.clone();
@@ -92,7 +120,11 @@ fn add_data(response: OpentDBResponse) {
     match output_data {
         Ok(json_string) => {
             fs::write(OUTPUT_FILE, json_string).unwrap();
-            println!("Added {} new entries. Total: {}", added, &current_trivia.len());
+            println!(
+                "Added {} new entries. Total: {}",
+                added,
+                &current_trivia.len()
+            );
         }
         Err(why) => {
             eprintln!("Could not serialize data {}", why);
