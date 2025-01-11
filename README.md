@@ -15,3 +15,17 @@ this json format:
 
 ## Usage
 
+[Download the binary for your operating system](https://github.com/mrborghini/dolly_parton/releases/latest)
+and then run it.
+
+You will see all the trivia appear inside of `trivia.json`
+
+## Building it yourself
+
+You need to install [Rust](https://rustup.rs/).
+
+And then run:
+
+```bash
+cargo run --release
+```
