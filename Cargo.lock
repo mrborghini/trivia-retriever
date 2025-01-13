@@ -1245,7 +1245,7 @@ dependencies = [
 
 [[package]]
 name = "trivia-retriever"
-version = "0.1.4"
+version = "0.1.5"
 dependencies = [
  "rand",
  "reqwest",
